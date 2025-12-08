@@ -14,7 +14,7 @@ export const authConfig: NextAuthConfig = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: async (credentials) => {
+      authorize: async (credentials: unknown) => {
         const parse = z
           .object({ email: z.string().email(), password: z.string().min(6) })
           .safeParse(credentials);
@@ -49,9 +49,11 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     async session({ session, token }) {
-      (session as any).user.id = token.uid as string;
-      (session as any).user.role = token.role as string;
-      return session;
+        if (session.user) {
+        (session as any).user.id = token.uid as string;
+        (session as any).user.role = token.role as string;
+        }
+        return session;
     },
   },
   pages: {

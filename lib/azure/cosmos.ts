@@ -55,3 +55,21 @@ export async function interestsContainer() {
   const { COSMOSDB_CONTAINER_INTERESTS } = getEnv();
   return getOrCreateContainer(COSMOSDB_CONTAINER_INTERESTS, "/pk");
 }
+
+export async function getTagsContainer() {
+  const { COSMOSDB_CONTAINER_TAGS } = getEnv();
+  if (!COSMOSDB_CONTAINER_TAGS) {
+    throw new Error("COSMOSDB_CONTAINER_TAGS is not set. Configure it in environment when TRAINER_BACKEND=cosmos.");
+  }
+  return getOrCreateContainer(COSMOSDB_CONTAINER_TAGS, "/pk");
+}
+
+export async function getArticleTagsContainer() {
+  const { COSMOSDB_CONTAINER_ARTICLE_TAGS } = getEnv();
+  if (!COSMOSDB_CONTAINER_ARTICLE_TAGS) {
+    throw new Error(
+      "COSMOSDB_CONTAINER_ARTICLE_TAGS is not set. Configure it in environment when TRAINER_BACKEND=cosmos."
+    );
+  }
+  return getOrCreateContainer(COSMOSDB_CONTAINER_ARTICLE_TAGS, "/pk");
+}

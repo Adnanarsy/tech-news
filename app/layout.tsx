@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import Providers from "@/app/providers";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -29,10 +29,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${inter.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <Nav />
-          <main className="mx-auto max-w-6xl p-4">{children}</main>
+          {/* Add top padding to account for fixed navbar (h-16) and fixed section header (h-12 approx) */}
+          <main className="mx-auto max-w-screen-2xl p-4 pt-32">{children}</main>
           <Footer />
         </Providers>
       </body>

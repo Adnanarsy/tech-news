@@ -4,19 +4,33 @@ import { useEffect, useState } from "react";
 export default function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<string>("system");
+  const [mql, setMql] = useState<MediaQueryList | null>(null);
 
   useEffect(() => {
     setMounted(true);
     const saved = localStorage.getItem("theme") || "system";
+    // Prepare system theme listener
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    setMql(media);
+    const handleChange = () => {
+      const current = localStorage.getItem("theme") || "system";
+      if (current === "system") applyTheme("system");
+    };
+    media.addEventListener?.("change", handleChange);
+    // Initial apply
     applyTheme(saved);
     setTheme(saved);
+    return () => media.removeEventListener?.("change", handleChange);
   }, []);
 
   function applyTheme(next: string) {
     const root = document.documentElement;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const dark = next === "dark" || (next === "system" && prefersDark);
+    const light = next === "light" || (next === "system" && !prefersDark);
+    // Ensure mutual exclusivity
     root.classList.toggle("dark", dark);
+    root.classList.toggle("light", light);
   }
 
   function toggle() {

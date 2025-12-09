@@ -1,11 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Article } from "@/types/article";
 import ArticleGrid from "./ArticleGrid";
 
 export default function SearchModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Article[]>([]);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const id = setTimeout(async () => {
@@ -17,14 +19,57 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
     return () => clearTimeout(id);
   }, [q]);
 
+  // Close on Escape and trap focus within dialog
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "Tab") {
+        const container = dialogRef.current;
+        if (!container) return;
+        const focusables = container.querySelectorAll<HTMLElement>(
+          'a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    // focus input when opening
+    setTimeout(() => inputRef.current?.focus(), 0);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-24" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black" onClick={(e) => e.stopPropagation()}>
-        <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
+    <div
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-24"
+      onClick={onClose}
+      aria-hidden="true"
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search articles"
+        className="w-full max-w-2xl rounded border"
+        style={{ background: "var(--background)", color: "var(--foreground)", borderColor: "var(--divider-color)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: "var(--divider-color)" }}>
           <input
-            autoFocus
+            ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search articles..."

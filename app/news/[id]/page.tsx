@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { Article } from "@/types/article";
 import { timeAgo } from "@/lib/time";
+import type { Metadata } from "next";
 
 async function fetchArticleById(id: string): Promise<Article | null> {
   const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/articles/${id}`, {
@@ -24,9 +25,48 @@ export default async function NewsDetail({ params }: { params: { id: string } })
           <Image src={article.image} alt={article.title} fill className="object-cover" />
         </div>
       )}
+      {/* SEO: JSON-LD Article schema */}
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'NewsArticle',
+            headline: article.title,
+            datePublished: article.createdAt,
+            image: article.image ? [article.image] : [],
+          }),
+        }}
+      />
       <div className="prose prose-zinc dark:prose-invert">
         <p>{article.content}</p>
       </div>
     </article>
   );
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const article = await fetchArticleById(params.id);
+  if (!article) return { title: 'Article not found' };
+  const url = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || '' : '';
+  const canonical = `${url}/news/${article.id}`;
+  return {
+    title: article.title,
+    description: article.content?.slice(0, 160),
+    alternates: { canonical },
+    openGraph: {
+      title: article.title,
+      description: article.content?.slice(0, 160),
+      url: canonical,
+      images: article.image ? [{ url: article.image }] : undefined,
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.title,
+      description: article.content?.slice(0, 160),
+      images: article.image ? [article.image] : undefined,
+    },
+  };
 }

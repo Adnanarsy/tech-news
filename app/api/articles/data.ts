@@ -13,9 +13,13 @@ const baseImages = [
 ];
 
 // Simple deterministic set so pagination is stable in dev
-export const ARTICLES: Article[] = Array.from({ length: 60 }).map((_, i) => {
+export const ARTICLES: Article[] = Array.from({ length: 180 }).map((_, i) => {
   const id = (i + 1).toString();
   const createdAt = new Date(Date.now() - i * 60 * 60 * 1000).toISOString();
+  // Alternate orientations to demonstrate portrait vs landscape behavior
+  const orientation = i % 2 === 0 ? "portrait" : "landscape";
+  // Vary card description length to affect card visual height
+  const cardDesc = i % 3 === 0 ? lipsum : i % 3 === 1 ? lipsum + " " + lipsum : lipsum.slice(0, 90);
   return {
     id,
     title: `Sample Tech Story ${i + 1}`,
@@ -23,6 +27,8 @@ export const ARTICLES: Article[] = Array.from({ length: 60 }).map((_, i) => {
     content: lipsum,
     category: i % 3 === 0 ? "trending" : i % 3 === 1 ? "deep" : "analysis",
     createdAt,
+    orientation,
+    cardDesc,
   };
 });
 

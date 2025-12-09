@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { timeAgo } from "@/lib/time";
 import type { Article } from "@/types/article";
+import { PheEmitter } from "@/lib/phe/emitter";
 
 interface Props {
   article: Article;
@@ -31,6 +32,10 @@ export default function ArticleCard({ article, trendingColor, onClick, hideTime 
   }, [keyViewed, keyBook]);
 
   function markViewed() {
+    // Fire-and-forget homomorphic scoring event for "open"
+    try {
+      PheEmitter.emitOpen(article.id);
+    } catch {}
     localStorage.setItem(keyViewed, "1");
     setViewed(true);
     onClick?.(article.id);

@@ -73,3 +73,11 @@ export async function getArticleTagsContainer() {
   }
   return getOrCreateContainer(COSMOSDB_CONTAINER_ARTICLE_TAGS, "/pk");
 }
+
+export async function getConfigContainer() {
+  const { COSMOSDB_CONTAINER_CONFIG } = getEnv();
+  if (!COSMOSDB_CONTAINER_CONFIG) {
+    throw new Error("COSMOSDB_CONTAINER_CONFIG is not set. Configure it in environment.");
+  }
+  return getOrCreateContainer(COSMOSDB_CONTAINER_CONFIG, "/pk");
+}

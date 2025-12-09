@@ -20,6 +20,7 @@ const EnvSchema = z.object({
   // Optional containers used when TRAINER_BACKEND=cosmos
   COSMOSDB_CONTAINER_TAGS: z.string().min(1).optional(),
   COSMOSDB_CONTAINER_ARTICLE_TAGS: z.string().min(1).optional(),
+  COSMOSDB_CONTAINER_CONFIG: z.string().min(1).optional(),
 
   PHE_PUBLIC_KEY_N: z.string().optional(),
   PHE_PUBLIC_KEY_G: z.string().optional(),

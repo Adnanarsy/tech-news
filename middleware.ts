@@ -32,6 +32,24 @@ function rateLimit(key: string, limit: number, windowMs: number) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // Prepare default security headers (Phase 9)
+  const securityHeaders: Record<string, string> = {
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=(), gyroscope=(), magnetometer=()",
+    // Use CSP Report-Only to avoid breaking dev; tighten in production as needed
+    "Content-Security-Policy-Report-Only": [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' https: data:",
+      "connect-src 'self' https:",
+      "font-src 'self' https:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  };
   // Basic rate limiting for auth and privileged APIs
   const ip = getClientIp(req);
   // Limit sign-in/auth routes (credentials attempts, callbacks)
@@ -43,12 +61,13 @@ export async function middleware(req: NextRequest) {
         headers: {
           "Retry-After": Math.max(0, Math.ceil((resetAt - Date.now()) / 1000)).toString(),
           "RateLimit-Remaining": remaining.toString(),
+          ...securityHeaders,
         },
       });
     }
   }
-  // Limit admin/trainer APIs
-  if (pathname.startsWith("/api/admin") || pathname.startsWith("/api/trainer")) {
+  // Limit admin/trainer/phe APIs
+  if (pathname.startsWith("/api/admin") || pathname.startsWith("/api/trainer") || pathname.startsWith("/api/phe")) {
     const { allowed, remaining, resetAt } = rateLimit(`priv:${ip}`, 120, 60 * 1000); // 120 per minute
     if (!allowed) {
       return new NextResponse("Too Many Requests", {
@@ -56,6 +75,7 @@ export async function middleware(req: NextRequest) {
         headers: {
           "Retry-After": Math.max(0, Math.ceil((resetAt - Date.now()) / 1000)).toString(),
           "RateLimit-Remaining": remaining.toString(),
+          ...securityHeaders,
         },
       });
     }
@@ -66,17 +86,23 @@ export async function middleware(req: NextRequest) {
     if (!token || (token as any).role !== "admin") {
       const url = new URL("/signin", req.url);
       url.searchParams.set("callbackUrl", req.nextUrl.pathname);
-      return NextResponse.redirect(url);
+      const res = NextResponse.redirect(url);
+      Object.entries(securityHeaders).forEach(([k, v]) => res.headers.set(k, v));
+      return res;
     }
   } else if (pathname.startsWith("/trainer")) {
     const role = (token as any)?.role as string | undefined;
     if (!token || (role !== "trainer" && role !== "admin")) {
       const url = new URL("/signin", req.url);
       url.searchParams.set("callbackUrl", req.nextUrl.pathname);
-      return NextResponse.redirect(url);
+      const res = NextResponse.redirect(url);
+      Object.entries(securityHeaders).forEach(([k, v]) => res.headers.set(k, v));
+      return res;
     }
   }
-  return NextResponse.next();
+  const res = NextResponse.next();
+  Object.entries(securityHeaders).forEach(([k, v]) => res.headers.set(k, v));
+  return res;
 }
 
 export const config = {
@@ -86,6 +112,7 @@ export const config = {
     "/trainer/:path*",
     "/api/admin/:path*",
     "/api/trainer/:path*",
+    "/api/phe/:path*",
     "/api/auth/:path*",
   ],
 };

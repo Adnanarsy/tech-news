@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) return jsonError(parsed.error, 400);
-  const scoring = await getScoring();
+  const scoring = getScoring();
   const items: z.infer<typeof ItemSchema>[] = (parsed.data as any).batch ? (parsed.data as any).batch : [parsed.data as any];
 
   // Early replay check: ensure all nonces are fresh (if provided)

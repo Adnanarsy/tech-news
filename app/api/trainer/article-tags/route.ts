@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
   const input = parsed.data;
   if ((process.env.TRAINER_BACKEND || "memory").toLowerCase() === "cosmos") {
     const c = await getArticleTagsContainer();
-    const trainerId = (token as any)?.uid as string | undefined;
     // Duplicate check
     const { resources: dup } = await c.items
       .query<any>({
@@ -62,30 +61,8 @@ export async function POST(req: NextRequest) {
       tagId: input.tagId,
       confidence: input.confidence,
       updatedAt: new Date().toISOString(),
-      createdBy: trainerId,
     };
     const { resource } = await c.items.upsert(doc);
-    
-    // Record history entry
-    try {
-      const historyDoc = {
-        type: "articleTagHistory",
-        pk: `a:${input.articleId}`,
-        id: uuid(),
-        articleId: input.articleId,
-        articleTagId: resource.id,
-        action: "created",
-        tagId: input.tagId,
-        confidence: input.confidence,
-        changedBy: trainerId || "system",
-        changedAt: new Date().toISOString(),
-      };
-      await c.items.upsert(historyDoc);
-    } catch (histError) {
-      // Don't fail the main operation if history recording fails
-      console.warn("Failed to record article tag history:", histError);
-    }
-    
     const out: ArticleTag = { id: resource.id, articleId: resource.articleId, tagId: resource.tagId, confidence: resource.confidence };
     return Response.json(out, { status: 201 });
   }
@@ -107,30 +84,8 @@ export async function DELETE(req: NextRequest) {
   if (!id) return jsonError("Missing id", 400);
   if ((process.env.TRAINER_BACKEND || "memory").toLowerCase() === "cosmos") {
     const c = await getArticleTagsContainer();
-    const trainerId = (token as any)?.uid as string | undefined;
     const { resource } = await c.item(id, undefined).read<any>();
     if (!resource || resource.type !== "articleTag") return notFound();
-    
-    // Record history entry before deletion
-    try {
-      const historyDoc = {
-        type: "articleTagHistory",
-        pk: `a:${resource.articleId}`,
-        id: uuid(),
-        articleId: resource.articleId,
-        articleTagId: resource.id,
-        action: "deleted",
-        tagId: resource.tagId,
-        confidence: resource.confidence,
-        changedBy: trainerId || "system",
-        changedAt: new Date().toISOString(),
-      };
-      await c.items.upsert(historyDoc);
-    } catch (histError) {
-      // Don't fail the main operation if history recording fails
-      console.warn("Failed to record article tag history:", histError);
-    }
-    
     await c.item(id, resource.pk).delete();
     return Response.json({ ok: true });
   }

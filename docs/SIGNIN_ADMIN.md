@@ -1,134 +1,80 @@
 # How to Sign In as Admin
 
+This guide explains how to create and sign in as an admin user.
+
 ## Prerequisites
 
-1. **Cosmos DB configured**: Make sure your `.env.local` has:
-   ```
-   COSMOSDB_ENDPOINT=https://your-account.documents.azure.com:443/
-   COSMOSDB_KEY=your-key
-   COSMOSDB_DATABASE=your-database
-   COSMOSDB_CONTAINER_USERS=users
-   NEXTAUTH_SECRET=your-secret-min-16-chars
-   ```
+1. Cosmos DB configured with `users` container
+2. Environment variables set in `.env.local`:
+   - `COSMOSDB_ENDPOINT`
+   - `COSMOSDB_KEY`
+   - `COSMOSDB_DATABASE`
+   - `COSMOSDB_CONTAINER_USERS`
+   - `NEXTAUTH_SECRET`
+   - `NEXTAUTH_URL`
 
-2. **Admin user exists**: You need a user account with `role: "admin"` in Cosmos DB.
+## Create Admin User
 
-## Method 1: Create Admin User via Script (Recommended)
-
-1. Install dependencies if not already:
-   ```bash
-   npm install
-   ```
-
-2. Run the create-admin script:
-   ```bash
-   node scripts/create-admin.js admin@example.com yourpassword "Admin Name"
-   ```
-
-   Replace:
-   - `admin@example.com` with your desired email
-   - `yourpassword` with your desired password (min 6 characters)
-   - `Admin Name` with the user's display name (optional)
-
-3. The script will create the admin user in Cosmos DB.
-
-## Method 2: Create Admin User via API
-
-You can also create an admin user by making a POST request to `/api/users`:
+### Using the Script
 
 ```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@example.com",
-    "password": "yourpassword",
-    "name": "Admin User",
-    "role": "admin"
-  }'
+npm run create-admin your-email@example.com yourpassword123 "Your Name"
 ```
 
-**Note**: This endpoint is not protected, so only use it in development or secure it in production.
+Example:
+```bash
+npm run create-admin admin@technews.com admin123 "Admin User"
+```
 
-## Method 3: Create Admin User via Cosmos DB Portal
+### Manual Creation
 
-1. Go to Azure Portal → Your Cosmos DB account
-2. Navigate to Data Explorer
-3. Select your database and `users` container
-4. Click "New Item" and create a document:
+If the script doesn't work, you can create a user manually in Cosmos DB:
+
+1. Open Azure Portal → Cosmos DB → Data Explorer
+2. Navigate to your `users` container
+3. Create a new item with this structure:
 
 ```json
 {
-  "id": "unique-id-here",
-  "pk": "user#unique-id-here",
-  "type": "user",
-  "email": "admin@example.com",
+  "id": "user-uuid-here",
+  "pk": "user#user-uuid-here",
+  "email": "admin@technews.com",
+  "password": "hashed-password-here",
   "name": "Admin User",
-  "passwordHash": "<bcrypt-hashed-password>",
   "role": "admin",
-  "createdAt": "2024-01-01T00:00:00.000Z",
-  "updatedAt": "2024-01-01T00:00:00.000Z"
+  "createdAt": "2024-12-20T10:00:00.000Z"
 }
 ```
 
-**Note**: You'll need to hash the password using bcrypt. You can use the script method above or an online bcrypt tool (not recommended for production).
+**Note**: Password must be hashed using bcrypt. Use the script for proper hashing.
 
-## Signing In
+## Sign In
 
-1. Start your development server:
-   ```bash
-   npm run dev
-   ```
-
-2. Navigate to the sign-in page:
-   ```
-   http://localhost:3000/signin
-   ```
-
-3. Enter your admin credentials:
-   - **Email**: The email you used when creating the admin user
-   - **Password**: The password you set
-
-4. Click "Sign in"
-
-5. You'll be redirected to the admin dashboard at `/admin`
-
-## Admin Features
-
-Once signed in as admin, you can access:
-
-- `/admin` - Admin dashboard
-- `/admin/users` - Manage user roles
-- `/admin/scoring` - Configure scoring constants
-- `/admin/crypto` - View PHE crypto parameters
-- `/admin/upload` - Create new articles
+1. Navigate to: `http://localhost:3000/signin`
+2. Enter your email and password
+3. Click "Sign in"
+4. You should be redirected to `/admin` dashboard
 
 ## Troubleshooting
 
-### "Cannot sign in" / "Invalid credentials"
-- Verify the user exists in Cosmos DB with the correct email
-- Check that the password hash matches (if created manually)
-- Ensure `NEXTAUTH_SECRET` is set in `.env.local`
+### "Invalid email or password"
+- Verify user exists in Cosmos DB
+- Check password hash is correct
+- Ensure `NEXTAUTH_SECRET` is set
 
-### "Access denied" after signing in
-- Verify the user's `role` field is set to `"admin"` (not `"user"` or `"trainer"`)
-- Check the Cosmos DB document structure matches the User interface
+### "Too Many Requests"
+- Rate limiting is active
+- Wait 10 minutes or adjust limits in `middleware.ts`
 
-### "Cosmos DB connection error"
-- Verify all Cosmos DB environment variables are set correctly
-- Check that the container exists (it will be created automatically if it doesn't)
-- Ensure your Cosmos DB account is accessible
+### User not found
+- Check Cosmos DB connection
+- Verify container name matches `COSMOSDB_CONTAINER_USERS`
+- Check user document structure
 
-### Change existing user to admin
-If you already have a user account, you can change their role to admin:
+## Verify Admin Access
 
-1. Sign in as that user (if possible) or use another admin account
-2. Go to `/admin/users`
-3. Change the user's role dropdown to "admin"
-
-Or update directly in Cosmos DB:
-```json
-{
-  "role": "admin"
-}
-```
+After signing in, you should be able to:
+- Access `/admin` dashboard
+- Create articles at `/admin/upload`
+- Manage users at `/admin/users`
 

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "clean": "rm -rf .next || Remove-Item -Recurse -Force .next",
+    "dev:clean": "npm run clean && npm run dev"
   },
   "dependencies": {
     "@azure/cosmos": "^4.2.0",

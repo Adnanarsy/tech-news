@@ -54,7 +54,9 @@ export async function middleware(req: NextRequest) {
   const ip = getClientIp(req);
   // Limit sign-in/auth routes (credentials attempts, callbacks)
   if (pathname.startsWith("/api/auth")) {
-    const { allowed, remaining, resetAt } = rateLimit(`auth:${ip}`, 10, 10 * 60 * 1000); // 10 per 10 minutes
+    // Increased limit for development and session checks
+    const limit = process.env.NODE_ENV === "production" ? 10 : 60;
+    const { allowed, remaining, resetAt } = rateLimit(`auth:${ip}`, limit, 10 * 60 * 1000); // 60 per 10 minutes in dev, 10 in prod
     if (!allowed) {
       return new NextResponse("Too Many Requests", {
         status: 429,

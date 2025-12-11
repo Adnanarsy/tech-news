@@ -23,9 +23,9 @@ export function getCreatedById(id: string): Article | null {
   return CREATED.find((a) => a.id === id) || null;
 }
 
-export function addCreatedArticle(input: CreateInput): Article {
+export function addCreatedArticle(input: CreateInput, existingId?: string): Article {
   const now = new Date().toISOString();
-  const id = `u-${uuid()}`;
+  const id = existingId || `u-${uuid()}`;
   const article: Article = {
     id,
     title: input.title,
@@ -40,7 +40,13 @@ export function addCreatedArticle(input: CreateInput): Article {
   };
   // Only store if published (drafts can be added later if needed)
   if (input.status !== "draft") {
-    CREATED.unshift(article);
+    // Check if article already exists (update instead of duplicate)
+    const existingIndex = CREATED.findIndex((a) => a.id === id);
+    if (existingIndex !== -1) {
+      CREATED[existingIndex] = article;
+    } else {
+      CREATED.unshift(article);
+    }
   }
   return article;
 }

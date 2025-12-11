@@ -3,29 +3,59 @@ import type { Article } from "@/types/article";
 import type { Tag, ArticleTag } from "@/types/taxonomy";
 import { timeAgo } from "@/lib/time";
 import type { Metadata } from "next";
+import { getArticleRepository } from "@/lib/articles/repository";
 
 async function fetchArticleById(id: string): Promise<Article | null> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/articles/${id}`, {
-    next: { revalidate: 60 },
-  });
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const repo = getArticleRepository();
+    const article = await repo.getById(id);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[NewsDetail] Fetching article ID: ${id}`);
+      if (!article) {
+        console.warn(`[NewsDetail] Article ID ${id} not found in repository.`);
+      }
+    }
+    return article;
+  } catch (error) {
+    console.error("Failed to fetch article:", error);
+    return null;
+  }
 }
 
-export default async function NewsDetail({ params }: { params: { id: string } }) {
-  const article = await fetchArticleById(params.id);
+export default async function NewsDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const article = await fetchArticleById(id);
   if (!article) {
     return <div className="text-sm text-red-600">Article not found.</div>;
   }
   // Fetch trainer labels and canonical tags to show badges on the article page
   async function fetchBadges(): Promise<{ id: string; index: number; name: string }[]> {
     try {
-      const base = process.env.NEXT_PUBLIC_BASE_URL || "";
+      // Use absolute URL for server-side fetch
+      const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
       const [lRes, tRes] = await Promise.all([
-        fetch(`${base}/api/trainer/article-tags?articleId=${encodeURIComponent(article.id)}`, { cache: "no-store" }),
-        fetch(`${base}/api/trainer/tags`, { cache: "no-store" }),
+        fetch(`${baseUrl}/api/trainer/article-tags?articleId=${encodeURIComponent(article.id)}`, { cache: "no-store" }),
+        fetch(`${baseUrl}/api/trainer/tags`, { cache: "no-store" }),
       ]);
-      if (!lRes.ok || !tRes.ok) return [];
+      if (!lRes.ok || !tRes.ok) {
+        // Fallback to article.tags if API fails
+        if (Array.isArray(article.tags) && article.tags.length > 0) {
+          const tRes = await fetch(`${baseUrl}/api/trainer/tags`, { cache: "no-store" }).catch(() => null);
+          if (tRes?.ok) {
+            const t = await tRes.json();
+            const tags = t.items as Tag[];
+            const byId = new Map<string, Tag>(tags.map((x) => [x.id, x]));
+            return article.tags
+              .map((tid) => {
+                const tag = byId.get(tid);
+                return tag ? { id: tag.id, index: tag.index, name: tag.name } : null;
+              })
+              .filter((x): x is { id: string; index: number; name: string } => x !== null)
+              .sort((a, b) => a.index - b.index);
+          }
+        }
+        return [];
+      }
       const l = (await lRes.json()).items as ArticleTag[];
       const t = (await tRes.json()).items as Tag[];
       const byId = new Map<string, Tag>(t.map((x) => [x.id, x]));
@@ -42,7 +72,8 @@ export default async function NewsDetail({ params }: { params: { id: string } })
         }
       }
       return out.sort((a, b) => a.index - b.index);
-    } catch {
+    } catch (error) {
+      console.error("Failed to fetch badges:", error);
       return [];
     }
   }
@@ -50,7 +81,10 @@ export default async function NewsDetail({ params }: { params: { id: string } })
   return (
     <article className="max-w-3xl">
       <h1 className="text-3xl font-extrabold uppercase tracking-tight">{article.title}</h1>
-      <p className="mt-2 text-xs text-zinc-500">{timeAgo(article.createdAt)} — {article.category}</p>
+      <p className="mt-2 text-xs text-zinc-500">
+        {article.author && <span>{article.author} — </span>}
+        {timeAgo(article.createdAt)} — {article.category}
+      </p>
       {badges.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {badges.map((b) => (
@@ -62,7 +96,13 @@ export default async function NewsDetail({ params }: { params: { id: string } })
       )}
       {article.image && (
         <div className="relative w-full aspect-[16/9] my-6 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-          <Image src={article.image} alt={article.title} fill className="object-cover" />
+          <Image 
+            src={article.image} 
+            alt={article.title} 
+            fill 
+            className="object-cover"
+            unoptimized={article.image.includes('blob.core.windows.net')}
+          />
         </div>
       )}
       {/* SEO: JSON-LD Article schema */}
@@ -86,8 +126,9 @@ export default async function NewsDetail({ params }: { params: { id: string } })
   );
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const article = await fetchArticleById(params.id);
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const article = await fetchArticleById(id);
   if (!article) return { title: 'Article not found' };
   const url = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || '' : '';
   const canonical = `${url}/news/${article.id}`;

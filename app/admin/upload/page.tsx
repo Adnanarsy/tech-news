@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Article } from "@/types/article";
+import type { Tag } from "@/types/taxonomy";
 
 type FormState = {
   title: string;
@@ -8,8 +9,10 @@ type FormState = {
   category: string;
   author: string;
   imageUrl: string;
+  imageFile: File | null;
+  imageSource: "url" | "file";
   body: string;
-  tags: string; // comma separated
+  tags: string[]; // array of tag IDs
   orientation: "portrait" | "landscape" | "";
   status: "draft" | "published";
 };
@@ -21,14 +24,77 @@ export default function AdminUploadPage() {
     category: "analysis",
     author: "",
     imageUrl: "",
+    imageFile: null,
+    imageSource: "url",
     body: "",
-    tags: "",
+    tags: [],
     orientation: "",
     status: "published",
   });
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [showTagPanel, setShowTagPanel] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Load available tags on mount
+  useEffect(() => {
+    async function loadTags() {
+      try {
+        const res = await fetch("/api/trainer/tags");
+        if (res.ok) {
+          const data = await res.json();
+          const tags = (data.items || []) as Tag[];
+          // Sort alphabetically by name, only active tags
+          const sorted = tags
+            .filter((t) => t.active)
+            .sort((a, b) => a.name.localeCompare(b.name));
+          setAvailableTags(sorted);
+        }
+      } catch (err) {
+        console.error("Failed to load tags:", err);
+      }
+    }
+    loadTags();
+  }, []);
+
+  function toggleTag(tagId: string) {
+    setForm((prev) => {
+      const tags = prev.tags.includes(tagId)
+        ? prev.tags.filter((id) => id !== tagId)
+        : [...prev.tags, tagId];
+      return { ...prev, tags };
+    });
+  }
+
+  function getTagName(tagId: string): string {
+    return availableTags.find((t) => t.id === tagId)?.name || tagId;
+  }
+
+  async function handleImageUpload(file: File): Promise<string> {
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "articles");
+
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Image upload failed");
+      }
+
+      const data = await res.json();
+      return data.url;
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,17 +102,27 @@ export default function AdminUploadPage() {
     setError(null);
     setCreated(null);
     try {
+      // Handle image upload if file is selected
+      let imageUrl = form.imageUrl.trim();
+      if (form.imageSource === "file" && form.imageFile) {
+        imageUrl = await handleImageUpload(form.imageFile);
+      }
+
+      if (!imageUrl) {
+        throw new Error("Image URL or file is required");
+      }
+
+      // Convert tag IDs to array (already in array format)
+      const tagIds = form.tags;
+
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         category: form.category.trim(),
         author: form.author.trim() || undefined,
-        imageUrl: form.imageUrl.trim(),
+        imageUrl,
         body: form.body.trim(),
-        tags: form.tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags: tagIds,
         orientation: (form.orientation || undefined) as any,
         status: form.status,
       };
@@ -77,14 +153,23 @@ export default function AdminUploadPage() {
 
       <form onSubmit={onSubmit} className="rounded-lg border p-4 grid grid-cols-1 md:grid-cols-6 gap-4">
         <div className="md:col-span-4">
-          <label className="block text-xs mb-1">Title</label>
+          <label className="block text-xs mb-1">Title (max 9 words)</label>
           <input
             required
             value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            onChange={(e) => {
+              const words = e.target.value.trim().split(/\s+/).filter(Boolean);
+              if (words.length <= 9 || e.target.value.length < form.title.length) {
+                setForm((f) => ({ ...f, title: e.target.value }));
+              }
+            }}
             className="w-full rounded border px-2 py-1 bg-transparent"
             placeholder="Compilers meet AI: what's next?"
+            maxLength={180}
           />
+          <p className="text-xs text-zinc-500 mt-1">
+            {form.title.trim().split(/\s+/).filter(Boolean).length}/9 words
+          </p>
         </div>
         <div className="md:col-span-2">
           <label className="block text-xs mb-1">Category</label>
@@ -108,17 +193,54 @@ export default function AdminUploadPage() {
             onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
             className="w-full rounded border px-2 py-1 bg-transparent"
             placeholder="Ada Lovelace"
+            autoComplete="off"
           />
         </div>
         <div className="md:col-span-3">
-          <label className="block text-xs mb-1">Image URL</label>
-          <input
-            required
-            value={form.imageUrl}
-            onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-            className="w-full rounded border px-2 py-1 bg-transparent"
-            placeholder="https://images.unsplash.com/..."
-          />
+          <label className="block text-xs mb-1">Image</label>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="radio"
+                  checked={form.imageSource === "url"}
+                  onChange={() => setForm((f) => ({ ...f, imageSource: "url", imageFile: null }))}
+                />
+                URL
+              </label>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="radio"
+                  checked={form.imageSource === "file"}
+                  onChange={() => setForm((f) => ({ ...f, imageSource: "file", imageUrl: "" }))}
+                />
+                Upload
+              </label>
+            </div>
+            {form.imageSource === "url" ? (
+              <input
+                required={form.imageSource === "url"}
+                value={form.imageUrl}
+                onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                className="w-full rounded border px-2 py-1 bg-transparent"
+                placeholder="https://images.unsplash.com/..."
+              />
+            ) : (
+              <div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  required={form.imageSource === "file"}
+                  onChange={(e) => setForm((f) => ({ ...f, imageFile: e.target.files?.[0] || null }))}
+                  className="w-full rounded border px-2 py-1 bg-transparent text-xs"
+                />
+                {uploadingImage && <p className="text-xs text-zinc-500 mt-1">Uploading...</p>}
+                {form.imageFile && !uploadingImage && (
+                  <p className="text-xs text-zinc-500 mt-1">{form.imageFile.name}</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="md:col-span-6">
@@ -144,13 +266,61 @@ export default function AdminUploadPage() {
         </div>
 
         <div className="md:col-span-3">
-          <label className="block text-xs mb-1">Tags (comma separated)</label>
-          <input
-            value={form.tags}
-            onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
-            className="w-full rounded border px-2 py-1 bg-transparent"
-            placeholder="ID_02, ID_03"
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs">Tags</label>
+            <button
+              type="button"
+              onClick={() => setShowTagPanel(!showTagPanel)}
+              className="text-xs rounded-full border px-2 py-1 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              {showTagPanel ? "Hide Tags" : "Show Available Tags"}
+            </button>
+          </div>
+          
+          {/* Selected tags display */}
+          {form.tags.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {form.tags.map((tagId) => (
+                <span
+                  key={tagId}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                >
+                  {getTagName(tagId)}
+                  <button
+                    type="button"
+                    onClick={() => toggleTag(tagId)}
+                    className="ml-1 hover:text-red-600 dark:hover:text-red-400"
+                    aria-label={`Remove ${getTagName(tagId)}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Available tags panel */}
+          {showTagPanel && (
+            <div className="mb-2 p-3 border rounded max-h-48 overflow-y-auto" style={{ background: "var(--background)" }}>
+              <p className="text-xs font-medium mb-2">Available Tags (A-Z):</p>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      form.tags.includes(tag.id)
+                        ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black border-zinc-900 dark:border-zinc-100"
+                        : "border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    }`}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-xs mb-1">Orientation</label>

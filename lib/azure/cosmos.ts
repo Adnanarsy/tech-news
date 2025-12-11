@@ -36,6 +36,11 @@ export async function newsContainer() {
   return getOrCreateContainer(COSMOSDB_CONTAINER_NEWS, "/pk");
 }
 
+export async function articlesContainer() {
+  // Use news container for articles (same container)
+  return newsContainer();
+}
+
 export async function commentsContainer() {
   const { COSMOSDB_CONTAINER_COMMENTS } = getEnv();
   return getOrCreateContainer(COSMOSDB_CONTAINER_COMMENTS, "/pk");

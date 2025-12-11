@@ -36,6 +36,8 @@ export default function ArticleCard({ article, trendingColor, onClick, hideTime 
     try {
       PheEmitter.emitOpen(article.id);
     } catch {}
+    // Track click for trending
+    fetch(`/api/articles/${article.id}/click`, { method: "POST" }).catch(() => {});
     localStorage.setItem(keyViewed, "1");
     setViewed(true);
     onClick?.(article.id);
@@ -96,6 +98,7 @@ export default function ArticleCard({ article, trendingColor, onClick, hideTime 
           className={imageClasses}
           sizes={sizes || "(min-width: 768px) 33vw, 100vw"}
           loading="lazy"
+          unoptimized={article.image.includes('blob.core.windows.net')}
         />
 
         {/* Overlay background bar (Analysis). We use a themed solid background and cap width so right side image remains visible. */}

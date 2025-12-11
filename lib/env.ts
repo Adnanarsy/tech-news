@@ -25,6 +25,9 @@ const EnvSchema = z.object({
   PHE_PUBLIC_KEY_G: z.string().optional(),
   PHE_PRIVATE_KEY_LAMBDA: z.string().optional(),
   PHE_PRIVATE_KEY_MU: z.string().optional(),
+
+  // Optional: Article repository backend selection
+  ARTICLES_BACKEND: z.enum(["mock", "cosmos", "cms"]).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

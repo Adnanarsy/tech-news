@@ -12,6 +12,7 @@ export interface IArticleRepository {
   trending(params?: { limit?: number }): Promise<{ items: Article[] }>;
   search(params: { q: string; limit?: number }): Promise<{ items: Article[] }>;
   getById(id: string): Promise<Article | null>;
+  save(article: Article): Promise<Article>;
 }
 
 class MockArticleRepository implements IArticleRepository {
@@ -57,25 +58,60 @@ class MockArticleRepository implements IArticleRepository {
   async getById(id: string): Promise<Article | null> {
     return getCreatedById(id) || getMockById(id);
   }
+
+  async save(article: Article): Promise<Article> {
+    // For mock, add to created store with existing ID
+    const { addCreatedArticle } = await import("@/lib/articles/created_store");
+    addCreatedArticle(
+      {
+        title: article.title,
+        description: article.cardDesc,
+        category: article.category,
+        author: article.author,
+        imageUrl: article.image,
+        body: article.content,
+        tags: article.tags,
+        orientation: article.orientation,
+        status: "published",
+      },
+      article.id // Preserve the existing ID
+    );
+    return article;
+  }
 }
 
-// Factory: later we can switch by env to Cosmos/CMS implementation
+// Factory: Default to Cosmos DB for production, can override with ARTICLES_BACKEND env var
 export function getArticleRepository(): IArticleRepository {
-  const backend = (process.env.ARTICLES_BACKEND || "mock").toLowerCase();
+  // Default to cosmos, but allow override via env var (e.g., ARTICLES_BACKEND=mock for testing)
+  const backend = (process.env.ARTICLES_BACKEND || "cosmos").toLowerCase();
+  
   if (backend === "cosmos") {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { CosmosArticleRepository } = require("./repository_cosmos");
       return new CosmosArticleRepository();
     } catch (e) {
-      // Fallback to mock if cosmos repo isn't available; log once for visibility.
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.warn("ARTICLES_BACKEND=cosmos, but CosmosArticleRepository is not available. Falling back to mock.");
-      }
+      // Fallback to mock if cosmos repo isn't available; log error for visibility.
+      console.error("ARTICLES_BACKEND=cosmos, but CosmosArticleRepository is not available. Error:", e);
+      console.warn("Falling back to mock repository. Set ARTICLES_BACKEND=mock explicitly if this is intended.");
       return new MockArticleRepository();
     }
   }
+  
+  // Explicitly use mock if ARTICLES_BACKEND=mock is set
+  if (backend === "mock") {
+    return new MockArticleRepository();
+  }
+  
   // Future: add `cms` implementation here.
-  return new MockArticleRepository();
+  // Default fallback to cosmos (should not reach here if cosmos works)
+  console.warn(`Unknown ARTICLES_BACKEND="${backend}", defaulting to cosmos`);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { CosmosArticleRepository } = require("./repository_cosmos");
+    return new CosmosArticleRepository();
+  } catch (e) {
+    console.error("Failed to load CosmosArticleRepository, falling back to mock:", e);
+    return new MockArticleRepository();
+  }
 }

@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
         hostname: "images.unsplash.com",
       },
     ],
+    // Allow unoptimized images for Azure Blob Storage
+    unoptimized: false,
+  },
+  // Disable source maps in development to avoid warnings
+  productionBrowserSourceMaps: false,
+  // Turbopack configuration (Next.js 16 uses Turbopack by default)
+  turbopack: {
+    // Turbopack handles source maps differently, warnings are less common
   },
 };
 

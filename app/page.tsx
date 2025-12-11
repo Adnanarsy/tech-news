@@ -38,22 +38,67 @@ export default function Home() {
   const [deepInView, setDeepInView] = useState(false);
   const [analysisInView, setAnalysisInView] = useState(false);
 
+  // Use personalized endpoint for latest articles (PHE-based interest ranking)
+  const loadMoreLatestPersonalized = () => {
+    if (!hasMoreLatest || loadingLatest) return;
+    setLoadingLatest(true);
+
+    const params = new URLSearchParams({ limit: "9" });
+    if (latest.cursor) params.set("cursor", latest.cursor);
+    const url = `/api/articles/personalized?${params.toString()}`;
+
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Latest failed: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        setLatest((prev) => {
+          const items = [...prev.items, ...data.items];
+          return { items, cursor: data.nextCursor };
+        });
+        setHasMoreLatest(Boolean(data.nextCursor));
+        setLatestError(null);
+      })
+      .catch((e: any) => {
+        setHasMoreLatest(false);
+        setLatestError(e?.message || "Failed to load");
+      })
+      .finally(() => setLoadingLatest(false));
+  };
+
   useEffect(() => {
-    // initial fetches
+    // initial fetches - only run once on mount
+    let mounted = true;
+    
     fetch("/api/articles/trending")
       .then((r) => {
         if (!r.ok) throw new Error(`Trending failed: ${r.status}`);
         return r.json();
       })
-      .then((d) => setTrending(d.items))
-      .catch((e) => {
-        setTrending([]);
-        setTrendingError(e?.message || "Failed to load trending");
+      .then((d) => {
+        if (mounted) setTrending(d.items);
       })
-      .finally(() => setLoadingTrending(false));
-    loadMoreLatest();
+      .catch((e) => {
+        if (mounted) {
+          setTrending([]);
+          setTrendingError(e?.message || "Failed to load trending");
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoadingTrending(false);
+      });
+    
+    // Load initial data
+    if (mounted && latest.items.length === 0) {
+      loadMoreLatestPersonalized();
+    }
     loadMoreDeep();
     loadMoreAnalysis();
+    
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -106,7 +151,8 @@ export default function Home() {
     category === "latest" && setLoadingLatest(false);
   }
 
-  const loadMoreLatest = () => loadMore("latest", setLatest, setHasMoreLatest, latest);
+  // Use personalized endpoint for latest (PHE-based ranking)
+  const loadMoreLatest = () => loadMoreLatestPersonalized();
   const loadMoreDeep = () => loadMore("deep", setDeep, setHasMoreDeep, deep);
   const loadMoreAnalysis = () => loadMore("analysis", setAnalysis, setHasMoreAnalysis, analysis);
 

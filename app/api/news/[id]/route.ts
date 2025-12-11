@@ -5,9 +5,9 @@ import type { NewsPost } from "@/types/domain";
 // GET /api/news/[id]
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const { id } = await params;
   const container = await newsContainer();
   try {
     const { resource } = await container.item(id, `news#${id}`).read<NewsPost>();
